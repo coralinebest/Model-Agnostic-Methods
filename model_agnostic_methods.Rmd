@@ -1,0 +1,226 @@
+---
+title: "Machine learning homework"
+author: "Coraline Best"
+date: "2023-11-05"
+output: html_document
+---
+
+```{r}
+#Loading packages
+library(pacman)
+p_load(tidyverse, data.table, broom, parallel, here, plotly, ggplot2, stargazer, magrittr,skimr,janitor,  tidymodels, ADAPTS, caret, yardstick, rlang, parsnip, sandwich, lmtest, haven, tinytex, rdrobust,dplyr, plotrix, plyr,readxl, usmap, stringr, finalfit, scales,tidyr, gridExtra, patchwork, EventStudy, fixest,kableExtra,wesanderson, gtsummary, maps, cowplot, corrplot, ggcorrplot, ggthemes,wesanderson, mgcv, lmtest, pdp,randomForest, plotmo,plot3D,ICEbox,iml)
+
+
+#Setting working directory
+setwd("/Users/coraline/Desktop/Master2/Machine learning/Midterm")
+
+#Loading the datasets
+train<- read_csv("loan_train.csv")
+test<- read_csv("loan_test.csv")
+
+#Changing the names
+colnames(train)[1]<-"gender"
+colnames(train)[2]<-"married"
+colnames(train)[3]<- "dependents"
+colnames(train)[4]<- "education"
+colnames(train)[5]<- "self_employed"
+colnames(train)[6]<-"applicant_income"
+colnames(train)[7]<- "coaplicant_income"
+colnames(train)[8]<-"loan_amount"
+colnames(train)[9]<-"term"
+colnames(train)[10]<- "credit_history"
+colnames(train)[11]<- "area"
+colnames(train)[12]<- "status"
+
+colnames(test)[1]<-"gender"
+colnames(test)[2]<-"married"
+colnames(test)[3]<- "dependents"
+colnames(test)[4]<- "education"
+colnames(test)[5]<- "self_employed"
+colnames(test)[6]<-"applicant_income"
+colnames(test)[7]<- "coaplicant_income"
+colnames(test)[8]<-"loan_amount"
+colnames(test)[9]<-"term"
+colnames(test)[10]<- "credit_history"
+colnames(test)[11]<- "area"
+
+skim(train)
+
+train <- na.omit(train)
+train$status <- ifelse(train$status == "Y", 1, 0)
+train$status <- (train$status)
+```
+
+
+#Random forest
+```{r}
+
+rf_model <- randomForest(status ~ ., data = train, ntree = 100, importance=TRUE)
+
+predictions <- predict(rf_model, test)
+```
+
+#Partial Dependence Plots
+```{r}
+# Creating partial dependence functions
+partial_data1 <- partial(rf_model, pred.var = "applicant_income", plot = FALSE)
+partial_data2 <- partial(rf_model, pred.var = "loan_amount", plot = FALSE)
+partial_data3 <- partial(rf_model, pred.var = "term", plot = FALSE)
+partial_data4 <- partial(rf_model, pred.var = "credit_history", plot = FALSE)
+
+# Graphs
+partial_plot1 <- ggplot(partial_data1, aes(x=applicant_income, y=yhat)) +
+                 geom_line(color = "#66A61E") +
+                 xlab("Applicant Income") +
+                 ylab("Partial Dependence")+
+                 theme_classic()
+
+partial_plot2 <- ggplot(partial_data2, aes(x=loan_amount, y=yhat)) +
+                 geom_line(color = "#66A61E") +
+                 xlab("Loan Amount") +
+                 ylab("Partial Dependence")+
+                 theme_classic()
+
+partial_plot3 <- ggplot(partial_data3, aes(x=term, y=yhat)) +
+                 geom_line(color ="#66A61E") +
+                 xlab("Term") +
+                 ylab("Partial Dependence")+
+                 theme_classic()
+
+partial_plot4 <- ggplot(partial_data4, aes(x=credit_history, y=yhat)) +
+                 geom_line(color = "#66A61E") +
+                 xlab("Credit History") +
+                 ylab("Partial Dependence")+
+                 theme_classic()
+  
+
+# Combining plots
+combined_plot <- grid.arrange(partial_plot1, partial_plot2, partial_plot3, partial_plot4, ncol = 2)
+
+```
+
+#Variable importance
+```{r}
+
+imp_df <- data.frame(Variable = rownames(rf_model$importance), Importance = rf_model$importance[, 1])
+
+
+imp_df <- imp_df[order(-imp_df$Importance), ]
+
+ggplot(imp_df[1:10, ], aes(x = reorder(Variable, - Importance), y = Importance)) +
+  geom_col(fill = "#66A61E", show.legend = FALSE) +
+  coord_flip() +
+  labs(x = "",
+       y = "Relative importance")+
+  theme_classic()
+```
+```{r}
+
+library(randomForest)
+library(plotmo)
+
+
+rf_model <- randomForest(status ~ coaplicant_income+ applicant_income + loan_amount + credit_history, data = train, ntree = 100, importance = TRUE)
+
+
+variables_of_interest <- c("education", "applicant_income", "loan_amount", "credit_history")
+
+
+grid_params <- list(applicant_income = seq(min(train$applicant_income), max(train$applicant_income), length = 20),
+                    loan_amount = seq(min(train$loan_amount), max(train$loan_amount), length = 20))
+
+
+par(mfrow = c(2, 2))
+
+
+for (var in variables_of_interest) {
+  if (var %in% names(grid_params)) {
+    # Variable continue
+    grid <- expand.grid(grid_params)
+    grid$predictions <- predict(rf_model, newdata = grid)
+    plotmo(rf_model, pmethod = "partdep", predictor = var, grid = grid_params, main = paste("Partial Dependence Plot for", var))
+  } else {
+    # Variable catégorielle
+    plotmo(rf_model, pmethod = "partdep", predictor = var, main = paste("Partial Dependence Plot for", var))
+  }
+}
+
+par(mfrow = c(1, 1))
+
+
+```
+
+#Individual Conditional Expectation
+```{r}
+# Definte the ICE 
+ice_1 = partial(rf_model, pred.var = "applicant_income", ice = TRUE)
+ice_2 = partial(rf_model, pred.var = "loan_amount", ice = TRUE)
+ice_3 = partial(rf_model, pred.var = "term", ice = TRUE)
+ice_4 = partial(rf_model, pred.var = "credit_history", ice = TRUE)
+ice_5 = partial(rf_model, pred.var = "coaplicant_income", ice = TRUE)
+
+
+ice_plot1 = plotPartial(ice_1, 
+            rug=FALSE, 
+            train = train, 
+            alpha = 0.04,
+            center = FALSE,
+            levelplot = TRUE,
+            contour = TRUE,
+            xlab = "Applicant Income",
+            ylab = "pred. credit default",
+            pdp.lwd = 2.5,
+            pdp.col = "#66A61E")
+
+ice_plot2 = plotPartial(ice_2, 
+            rug=FALSE, 
+            train = train, 
+            alpha = 0.04,
+            center = FALSE,
+            levelplot = TRUE,
+            contour = TRUE,
+            xlab = "Loan Amount",
+            ylab = "pred. credit default",
+            pdp.lwd = 2.5,
+            pdp.col = "#66A61E")
+
+ice_plot3 = plotPartial(ice_3, 
+            rug=FALSE, 
+            train = train, 
+            alpha = 0.04,
+            center = FALSE,
+            levelplot = TRUE,
+            contour = TRUE,
+            xlab = "Term",
+            ylab = "pred. credit default",
+            pdp.lwd = 2.5,
+            pdp.col = "#66A61E")
+
+ice_plot4 = plotPartial(ice_4, 
+            rug=FALSE, 
+            train = train, 
+            alpha = 0.04,
+            center = FALSE,
+            levelplot = TRUE,
+            contour = TRUE,
+            xlab = "Credit History",
+            ylab = "pred. credit default",
+            pdp.lwd = 2.5,
+            pdp.col = "#66A61E")
+
+ice_plot5 = plotPartial(ice_5, 
+                        rug=FALSE, 
+                        train = train, 
+                        alpha = 0.04,
+                        center = FALSE,
+                        levelplot = TRUE,
+                        contour = TRUE,
+                        xlab = "Credit History",
+                        ylab = "pred. credit default",
+                        pdp.lwd = 2.5,
+                        pdp.col = "#66A61E")
+
+ice_plots <- grid.arrange(ice_plot1, ice_plot2, ice_plot3, ice_plot4, ncol = 2)
+
+```
+
