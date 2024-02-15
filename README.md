@@ -1,7 +1,7 @@
 # Machine Learning: Interpretability Methods
 
 ## Overview
-This document explores the interpretability of machine learning models, focusing on the methods of Partial Dependence Plot (PDP) and Individual Conditional Expectation (ICE). The empirical example involves predicting loan repayment using a random forest model, known for its limited interpretability.
+This document explores the interpretability of machine learning models, focusing on the methods of Partial Dependence Plot (PDP) and Individual Conditional Expectation (ICE). The empirical example involves predicting loan repayment using a random forest model in R.
 
 ## Presentation of the Application
 
